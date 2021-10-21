@@ -1,6 +1,6 @@
 /*
 (c) Copyright 2020 Akamai Technologies, Inc. Licensed under Apache 2 license.
-Version: 0.3
+Version: 0.4.1
 Purpose:  Provide a helper class to simplify the interaction with EdgeKV in an EdgeWorker.
 Repo: https://github.com/akamai/edgeworkers-examples/tree/master/edgekv/lib
 */
@@ -122,8 +122,12 @@ export class EdgeKV {
 				write(chunk) {
 					result += chunk;
 				}
-			}));
+			}), { preventAbort: true });
 		return result;
+	}
+
+	async streamJson(response_body) {
+		return JSON.parse(await this.streamText(response_body));
 	}
 
 	putRequest({ namespace = this.#namespace, group = this.#group, item, value, timeout = null } = {}) {
@@ -158,6 +162,23 @@ export class EdgeKV {
 	}
 
 	/**
+	 * PUT text into an item in the EdgeKV while only waiting for the request to send and not for the response.
+	 * @param {string} [$0.namepsace=this.#namespace] specify a namespace other than the default
+	 * @param {string} [$0.group=this.#group] specify a group other than the default
+	 * @param {string} $0.item item key to put into the EdgeKV
+	 * @param {string} $0.value text value to put into the EdgeKV
+	 * @throws {object} if the operation was not successful at sending the request,
+	 * 		an object describing the error: {failed, status, body}
+	 */
+	putTextNoWait({ namespace = this.#namespace, group = this.#group, item, value } = {}) {
+		try {
+			this.putRequest({ namespace: namespace, group: group, item: item, value: value });
+		} catch (error) {
+			this.throwError("PUT FAILED", 0, error.toString());
+		}
+	}
+
+	/**
 	 * async PUT json into an item in the EdgeKV.
 	 * @param {string} [$0.namepsace=this.#namespace] specify a namespace other than the default
 	 * @param {string} [$0.group=this.#group] specify a group other than the default
@@ -176,6 +197,23 @@ export class EdgeKV {
 			"PUT",
 			null
 		);
+	}
+
+	/**
+	 * PUT json into an item in the EdgeKV while only waiting for the request to send and not for the response.
+	 * @param {string} [$0.namepsace=this.#namespace] specify a namespace other than the default
+	 * @param {string} [$0.group=this.#group] specify a group other than the default
+	 * @param {string} $0.item item key to put into the EdgeKV
+	 * @param {object} $0.value json value to put into the EdgeKV
+	 * @throws {object} if the operation was not successful at sending the request,
+	 * 		an object describing the error: {failed, status, body}
+	 */
+	putJsonNoWait({ namespace = this.#namespace, group = this.#group, item, value } = {}) {
+		try {
+			this.putRequest({ namespace: namespace, group: group, item: item, value: JSON.stringify(value) });
+		} catch (error) {
+			this.throwError("PUT FAILED", 0, error.toString());
+		}
 	}
 
 	getRequest({ namespace = this.#namespace, group = this.#group, item, timeout = null } = {}) {
@@ -223,7 +261,7 @@ export class EdgeKV {
 		return this.requestHandlerTemplate(
 			() => this.getRequest({ namespace: namespace, group: group, item: item, timeout: timeout }),
 			(response) => response.json(),
-			(response) => JSON.parse(this.streamText(response.body)),
+			(response) => this.streamJson(response.body),
 			"GET JSON",
 			default_value
 		);
